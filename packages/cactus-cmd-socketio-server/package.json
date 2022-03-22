@@ -2,29 +2,31 @@
   "name": "@hyperledger/cactus-cmd-socket-server",
   "version": "1.0.0-rc.3",
   "license": "Apache-2.0",
+  "main": "dist/src/main/typescript/index.js",
+  "module": "dist/src/main/typescript/index.js",
+  "types": "dist/src/main/typescript/index.d.ts",
   "scripts": {
     "build": "npm run build-ts && npm run build:dev:backend:postbuild",
     "build-ts": "tsc",
-    "build:dev:backend:postbuild": "npm run copy-static-assets",
-    "copy-static-assets": "ts-node copyStaticAssets.ts"
+    "build:dev:backend:postbuild": "cp -f ../../yarn.lock ./dist/"
   },
   "dependencies": {
     "@hyperledger/cactus-common": "1.0.0-rc.3",
     "@types/node": "^14.0.24",
     "body-parser": "^1.19.0",
-    "cookie-parser": "~1.4.4",
+    "cookie-parser": "1.4.5",
     "debug": "~2.6.9",
     "ethereumjs-common": "^1.5.1",
     "ethereumjs-tx": "^2.1.2",
     "express": "~4.16.1",
     "fabric-ca-client": "1.4.19",
     "fabric-network": "1.4.19",
+    "http-errors": "1.6.3",
     "js-yaml": "3.14.1",
-    "http-errors": "~1.6.3",
     "jsonwebtoken": "^8.5.1",
     "jsrsasign": "10.5.0",
     "log4js": "^6.4.0",
-    "morgan": "~1.9.1",
+    "morgan": "1.10.0",
     "shelljs": "^0.8.4",
     "socket.io": "4.1.3",
     "socket.io-client": "4.1.3",
@@ -33,6 +35,10 @@
   },
   "devDependencies": {
     "@hyperledger/cactus-test-tooling": "1.0.0-rc.3",
+    "@types/cookie-parser": "1.4.2",
+    "@types/http-errors": "1.6.3",
+    "@types/morgan": "1.9.1",
+    "@types/shelljs": "^0.8.11",
     "ts-node": "8.9.1"
   }
 }

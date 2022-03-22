@@ -6,6 +6,7 @@ import json
 import logging
 
 import argparse
+import os
 import sys
 from ctypes import *
 from os.path import dirname, isfile
@@ -34,12 +35,12 @@ http_req_params = {
     "url": "http://localhost:5034/api/v1/bl/trades/",
     "businessLogicID": "guks32pf",
     "tradeParams": ["0xec709e1774f0ce4aba47b52a499f9abaaa159f71",
-                     "0x9d624f7995e8bd70251f8265f2f9f2b49f169c55",
-                    "fuser01", "fuser02", "CAR1"],
+                    "0x9d624f7995e8bd70251f8265f2f9f2b49f169c55",
+                    "Brad", "Cathy", "asset2"],
     "authParams": ["<<company name>>"]
 }
 
-proof_file_path = "/etc/cactus/indy-validator/myproof.json"
+proof_file_path = "/etc/cactus/validator_socketio_indy/myproof.json"
 
 #parser = argparse.ArgumentParser(description='Run python getting-started scenario (Alice/Faber)')
 parser = argparse.ArgumentParser(description='Run python getting-started scenario (Alice/Acme/Thrift)')
@@ -83,7 +84,10 @@ if args.storage_type:
 async def run():
     logger.info("Getting started -> started")
 
-    if (not isfile(proof_file_path)) or args.force or args.proof_only:
+    if (not isfile(proof_file_path)) or args.force:
+        # Create dir for proof if doesn't already exist
+        os.makedirs(dirname(proof_file_path), exist_ok=True)
+
         pool_ = {
             'name': 'pool1'
         }

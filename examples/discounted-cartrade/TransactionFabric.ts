@@ -15,8 +15,7 @@
  * In this case, it is used only when transferring assets.
  */
 
-import { TransactionSigner } from "../../packages/cactus-cmd-socketio-server/src/main/typescript/util/TransactionSigner";
-import { Verifier } from "../../packages/cactus-cmd-socketio-server/src/main/typescript/verifier/Verifier";
+import { Verifier, ConfigUtil } from "@hyperledger/cactus-cmd-socket-server";
 
 const fs = require("fs");
 const path = require("path");
@@ -24,9 +23,7 @@ const yaml = require("js-yaml");
 import { FileSystemWallet } from "fabric-network";
 
 //const config: any = JSON.parse(fs.readFileSync("/etc/cactus/default.json", 'utf8'));
-const config: any = yaml.safeLoad(
-  fs.readFileSync("/etc/cactus/default.yaml", "utf8"),
-);
+const config: any = ConfigUtil.getConfig();
 import { getLogger } from "log4js";
 const moduleName = "TransactionFabric";
 const logger = getLogger(`${moduleName}`);

@@ -1,1 +1,0 @@
-../cartrade/script-build-get-app.sh

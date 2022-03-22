@@ -11,7 +11,6 @@ module.exports = {
   // Ignore the tests that are still using tap/tape for as their test runner
   testPathIgnorePatterns: [
     `./packages/cactus-plugin-keychain-aws-sm/src/test/typescript/integration/openapi/openapi-validation.test.ts`,
-    `./packages/cactus-plugin-odap-hermes/src/test/typescript/integration/odap/transfer-complete.test.ts`,
     `./packages/cactus-plugin-odap-hermes/src/test/typescript/integration/odap/odap-api-call.test.ts`,
     `./packages/cactus-plugin-odap-hermes/src/test/typescript/integration/odap/odap-api-call-with-ledger-connector.test.ts`,
     `./packages/cactus-plugin-odap-hermes/src/test/typescript/integration/odap/lock-evidence.test.ts`,
@@ -153,5 +152,7 @@ module.exports = {
     `./examples/cactus-example-carbon-accounting-backend/src/test/typescript/integration/admin-enroll-v1-endpoint.test.ts`,
     `./examples/cactus-example-supply-chain-backend/src/test/typescript/integration/supply-chain-backend-api-calls.test.ts`,
     `./examples/cactus-example-supply-chain-backend/src/test/typescript/integration/supply-chain-cli-via-npm-script.test.ts`,
+    `./examples/cactus-check-connection-ethereum-validator/src/test/typescript/integration/check-connection-to-ledger.test.ts`,
+    `./examples/cactus-check-connection-ethereum-validator/src/test/typescript/integration/check-config-files.test.ts`,
   ],
 };
