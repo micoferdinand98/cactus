@@ -1,0 +1,13 @@
+[
+    {
+    "**/*.ts": "// Copyright 2019 My Name. All rights reserved. MIT license."
+
+    "ignore": [
+        "lib/vendor/jquery.js", // ignore this file
+        "    /home/micoferdinand98/cactus/node_modules/@babel/plugin-syntax-optional-catch-binding/node_modules/@babel/core/lib/config/validation" // ignore all files under vendor
+      ]
+},
+{
+    "run-custom-checks.ts": "ODAP hermes plugin license checker"
+  } 
+]

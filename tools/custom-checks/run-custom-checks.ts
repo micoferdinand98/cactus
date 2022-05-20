@@ -2,6 +2,7 @@ import esMain from "es-main";
 import { checkOpenApiJsonSpecs } from "./check-open-api-json-specs";
 import { checkPackageJsonSort } from "./check-package-json-sort";
 import { checkSiblingDepVersionConsistency } from "./check-sibling-dep-version-consistency";
+import { checkLicense } from "https://deno.land/x/license_checker@v3.2.0/lib.ts";
 
 export async function runCustomChecks(
   argv: string[],
@@ -51,3 +52,19 @@ export async function runCustomChecks(
 if (esMain(import.meta)) {
   runCustomChecks(process.argv, process.env, process.versions.node);
 }
+
+type Config = {
+  ignore?: string[];
+  config: Array<[string, (string | string[])]>;
+};
+
+// The tuple `[string, (string | string[])]` means
+// The pair of (globPattern, license-headers)
+// This checks whether license-headers exists files of globPattern.
+
+type Options = {
+  inject: boolean;
+  quiet: boolean;
+  cwd: string;
+};
+
