@@ -6,8 +6,8 @@
  */
 
 import { Router, NextFunction, Request, Response } from "express";
-import { ConfigUtil } from "@hyperledger/cactus-cmd-socket-server";
-import { RIFError } from "@hyperledger/cactus-cmd-socket-server";
+import { ConfigUtil } from "@hyperledger/cactus-cmd-socketio-server";
+import { RIFError } from "@hyperledger/cactus-cmd-socketio-server";
 import { FabricAssetManagement } from "./fabric-asset-management";
 
 const config: any = ConfigUtil.getConfig();
@@ -34,7 +34,9 @@ router.get("/:assetID", (req: Request, res: Response, next: NextFunction) => {
         logger.error(err);
       });
   } catch (err) {
-    logger.error(`##(queryAsset)err name: ${err.constructor.name}`);
+    if (err instanceof Error) {
+      logger.error(`##(queryAsset)err name: ${err.constructor.name}`);
+    }
 
     if (err instanceof RIFError) {
       logger.debug(`##catch RIFError, ${err.statusCode}, ${err.message}`);
@@ -63,7 +65,9 @@ router.get("/", (req: Request, res: Response, next: NextFunction) => {
         logger.error(err);
       });
   } catch (err) {
-    logger.error(`##(queryAllAssets)err name: ${err.constructor.name}`);
+    if (err instanceof Error) {
+      logger.error(`##(queryAllAssets)err name: ${err.constructor.name}`);
+    }
 
     if (err instanceof RIFError) {
       logger.debug(`##catch RIFError, ${err.statusCode}, ${err.message}`);

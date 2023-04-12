@@ -105,7 +105,7 @@ The `npm run watch` script in action:
   * Docker Compose
   * OpenJDK (Corda support Java 8 JDK but do not currently support Java 9 or higher)
     * `sudo apt install openjdk-8-jdk-headless`
-  * Indy SDK
+  * Indy SDK (optional)
     * [Installing the SDK](https://github.com/hyperledger/indy-sdk#installing-the-sdk)
     * [Build the SDK from source](https://github.com/hyperledger/indy-sdk#how-to-build-indy-sdk-from-source)
 
@@ -127,6 +127,12 @@ git config --system core.longpaths true
 
 ```sh
 cd cactus
+```
+
+* Run this command to enable corepack (Corepack is included by default with all Node.js installs, but is currently opt-in.)
+
+```sh
+npm run enable-corepack
 ```
 
 * Run the initial configuration script (can take a long time, 10+ minutes on a low-spec laptop)
@@ -229,7 +235,7 @@ Locate the `ci.yml` within `.github/workflows` and add to the `ci.yml` code list
     with:
       repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-Keep in mind that the SSH upterm session should come after the checkout step (uses: actions/checkout@v2.3.4) to ensure that the CI doesn't hang without before the debugging step occurs. Editing the `ci.yml` will create a new upterm session within `.github/workflows` by adding a new build step. For more details, see the [Debug your GitHub Actions by using ssh](https://github.com/marketplace/actions/debugging-with-ssh).
+Keep in mind that the SSH upterm session should come after the checkout step (uses: actions/checkout@v3.1.0) to ensure that the CI doesn't hang without before the debugging step occurs. Editing the `ci.yml` will create a new upterm session within `.github/workflows` by adding a new build step. For more details, see the [Debug your GitHub Actions by using ssh](https://github.com/marketplace/actions/debugging-with-ssh).
 
 By creating a PR for the edited `ci.yml` file, this will the CI to run their tests. There are two ways to navigate to CIs.
   1) Go to the PR and click the `checks` tab

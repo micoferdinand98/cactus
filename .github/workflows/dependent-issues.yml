@@ -15,9 +15,13 @@ on:
   schedule:
     - cron: '0 0 * * *' # schedule daily check
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: buildjet-2vcpu-ubuntu-2204
     name: Dependent Issues
     steps:
       - uses: z0al/dependent-issues@v1

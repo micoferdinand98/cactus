@@ -6,12 +6,10 @@
  */
 
 import { Router, NextFunction, Request, Response } from "express";
-import { TransactionManagement } from "@hyperledger/cactus-cmd-socket-server";
-import { RIFError } from "@hyperledger/cactus-cmd-socket-server";
-import { ConfigUtil } from "@hyperledger/cactus-cmd-socket-server";
+import { TransactionManagement } from "@hyperledger/cactus-cmd-socketio-server";
+import { RIFError } from "@hyperledger/cactus-cmd-socketio-server";
+import { ConfigUtil } from "@hyperledger/cactus-cmd-socketio-server";
 
-const fs = require("fs");
-const path = require("path");
 import escapeHtml from "escape-html";
 const config: any = ConfigUtil.getConfig();
 import { getLogger } from "log4js";
@@ -20,8 +18,7 @@ const logger = getLogger(`${moduleName}`);
 logger.level = config.logLevel;
 
 const router: Router = Router();
-export const transactionManagement: TransactionManagement =
-  new TransactionManagement();
+export const transactionManagement: TransactionManagement = new TransactionManagement();
 
 // Request Execution of Trade
 router.post("/", (req: Request, res: Response, next: NextFunction) => {

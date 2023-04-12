@@ -2,7 +2,8 @@ import { EventEmitter } from "events";
 import Docker, { Container } from "dockerode";
 import { v4 as internalIpV4 } from "internal-ip";
 import Web3 from "web3";
-import { Account } from "web3-core";
+import { AbiItem } from "web3-utils";
+import { Account, TransactionReceipt } from "web3-core";
 import { v4 as uuidv4 } from "uuid";
 
 import {
@@ -14,6 +15,7 @@ import {
 } from "@hyperledger/cactus-common";
 
 import { Containers } from "../common/containers";
+import { RuntimeError } from "run-time-error";
 
 export interface IOpenEthereumTestLedgerOptions {
   envVars?: string[];
@@ -24,11 +26,13 @@ export interface IOpenEthereumTestLedgerOptions {
   emitContainerLogs?: boolean;
   chain?: string;
   httpPort?: number;
+  wsPort?: number;
 }
 
 export const K_DEFAULT_OPEN_ETHEREUM_IMAGE_NAME = "openethereum/openethereum";
 export const K_DEFAULT_OPEN_ETHEREUM_IMAGE_VERSION = "v3.2.4";
 export const K_DEFAULT_OPEN_ETHEREUM_HTTP_PORT = 8545;
+export const K_DEFAULT_OPEN_ETHEREUM_WS_PORT = 8546;
 // @see https://openethereum.github.io/Chain-specification
 // @see https://github.com/openethereum/openethereum/tree/main/crates/ethcore/res/chainspec
 export const K_DEFAULT_OPEN_ETHEREUM_CHAIN = "dev";
@@ -53,8 +57,10 @@ export class OpenEthereumTestLedger {
   private readonly emitContainerLogs: boolean;
   private readonly chain: string;
   private readonly httpPort: number;
+  private readonly wsPort: number;
   private _container: Container | undefined;
   private _containerId: string | undefined;
+  private _web3: Web3 | undefined;
 
   public get imageFqn(): string {
     return `${this.imageName}:${this.imageVersion}`;
@@ -72,6 +78,16 @@ export class OpenEthereumTestLedger {
     }
   }
 
+  private get web3(): Web3 {
+    if (this._web3) {
+      return this._web3;
+    } else {
+      throw new Error(
+        "Invalid state: web3 client is missing, start the ledger container first.",
+      );
+    }
+  }
+
   constructor(public readonly options: IOpenEthereumTestLedgerOptions) {
     const fnTag = `${this.className}#constructor()`;
     Checks.truthy(options, `${fnTag} arg options`);
@@ -86,6 +102,7 @@ export class OpenEthereumTestLedger {
 
     this.chain = this.options.chain || K_DEFAULT_OPEN_ETHEREUM_CHAIN;
     this.httpPort = this.options.httpPort || K_DEFAULT_OPEN_ETHEREUM_HTTP_PORT;
+    this.wsPort = this.options.wsPort || K_DEFAULT_OPEN_ETHEREUM_WS_PORT;
     this.imageName =
       this.options.imageName || K_DEFAULT_OPEN_ETHEREUM_IMAGE_NAME;
     this.imageVersion =
@@ -123,7 +140,8 @@ export class OpenEthereumTestLedger {
       "--jsonrpc-cors=all",
       "--jsonrpc-interface=all",
       "--jsonrpc-hosts=all",
-      "--jsonrpc-apis=web3,eth,net,parity",
+      "--jsonrpc-apis=web3,eth,personal,net,parity",
+      "--ws-port=" + this.wsPort,
       "--ws-interface=all",
       "--ws-apis=web3,eth,net,parity,pubsub",
       "--ws-origins=all",
@@ -139,8 +157,14 @@ export class OpenEthereumTestLedger {
         [],
         {
           Env,
-          PublishAllPorts: true,
           Healthcheck,
+          ExposedPorts: {
+            [`${this.httpPort}/tcp`]: {},
+            [`${this.wsPort}/tcp`]: {},
+          },
+          HostConfig: {
+            PublishAllPorts: true,
+          },
         },
         {},
         (err?: Error) => {
@@ -166,6 +190,7 @@ export class OpenEthereumTestLedger {
 
         try {
           await Containers.waitForHealthCheck(this._containerId);
+          this._web3 = new Web3(await this.getRpcApiHttpHost());
           resolve(container);
         } catch (ex) {
           reject(ex);
@@ -178,20 +203,67 @@ export class OpenEthereumTestLedger {
    * Creates a new ETH account from scratch on the ledger and then sends it a
    * little seed money to get things started.
    *
+   * Uses `web3.eth.accounts.create`
+   *
    * @param [seedMoney=10e8] The amount of money to seed the new test account with.
    */
   public async createEthTestAccount(seedMoney = 10e8): Promise<Account> {
-    const fnTag = `${this.className}#getEthTestAccount()`;
+    const ethTestAccount = this.web3.eth.accounts.create(uuidv4());
 
-    const rpcApiHttpHost = await this.getRpcApiHttpHost();
-    const web3 = new Web3(rpcApiHttpHost);
-    const ethTestAccount = web3.eth.accounts.create(uuidv4());
+    const receipt = await this.transferAssetFromCoinbase(
+      ethTestAccount.address,
+      seedMoney,
+    );
 
-    const tx = await web3.eth.accounts.signTransaction(
+    if (receipt instanceof Error) {
+      throw new RuntimeError("Error in createEthTestAccount", receipt);
+    } else {
+      return ethTestAccount;
+    }
+  }
+
+  /**
+   * Creates a new personal ethereum account with specified initial money and password.
+   *
+   * Uses `web3.eth.personal.newAccount`
+   *
+   * @param seedMoney Initial money to transfer to this account
+   * @param password Personal account password
+   * @returns New account address
+   */
+  public async newEthPersonalAccount(
+    seedMoney = 10e8,
+    password = "test",
+  ): Promise<string> {
+    const account = await this.web3.eth.personal.newAccount(password);
+
+    const receipt = await this.transferAssetFromCoinbase(account, seedMoney);
+
+    if (receipt instanceof Error) {
+      throw new RuntimeError("Error in newEthPersonalAccount", receipt);
+    } else {
+      return account;
+    }
+  }
+
+  /**
+   * Seed `targetAccount` with money from coin base account.
+   *
+   * @param targetAccount Ethereum account to send money to.
+   * @param value Amount of money.
+   * @returns Transfer `TransactionReceipt`
+   */
+  public async transferAssetFromCoinbase(
+    targetAccount: string,
+    value: number,
+  ): Promise<TransactionReceipt> {
+    const fnTag = `${this.className}#transferAssetFromCoinbase()`;
+
+    const tx = await this.web3.eth.accounts.signTransaction(
       {
         from: K_DEV_WHALE_ACCOUNT_PUBLIC_KEY,
-        to: ethTestAccount.address,
-        value: seedMoney,
+        to: targetAccount,
+        value: value,
         gas: 1000000,
       },
       K_DEV_WHALE_ACCOUNT_PRIVATE_KEY,
@@ -201,13 +273,47 @@ export class OpenEthereumTestLedger {
       throw new Error(`${fnTag} Signing transaction failed, reason unknown.`);
     }
 
-    const receipt = await web3.eth.sendSignedTransaction(tx.rawTransaction);
+    return await this.web3.eth.sendSignedTransaction(tx.rawTransaction);
+  }
 
-    if (receipt instanceof Error) {
-      throw receipt;
-    } else {
-      return ethTestAccount;
+  /**
+   * Deploy contract from coin base account to the ledger.
+   *
+   * @param abi - JSON interface of the contract.
+   * @param bytecode - Compiled code of the contract.
+   * @param args - Contract arguments.
+   * @returns Contract deployment `TransactionReceipt`
+   */
+  public async deployContract(
+    abi: AbiItem | AbiItem[],
+    bytecode: string,
+    args?: any[],
+  ): Promise<TransactionReceipt> {
+    // Encode ABI
+    const contractProxy = new this.web3.eth.Contract(abi);
+    const contractTx = contractProxy.deploy({
+      data: bytecode,
+      arguments: args,
+    });
+
+    // Send TX
+    const signedTx = await this.web3.eth.accounts.signTransaction(
+      {
+        from: K_DEV_WHALE_ACCOUNT_PUBLIC_KEY,
+        data: contractTx.encodeABI(),
+        gas: 8000000, // Max possible gas
+        nonce: await this.web3.eth.getTransactionCount(
+          K_DEV_WHALE_ACCOUNT_PUBLIC_KEY,
+        ),
+      },
+      K_DEV_WHALE_ACCOUNT_PRIVATE_KEY,
+    );
+
+    if (!signedTx.rawTransaction) {
+      throw new Error(`Signing transaction failed, reason unknown.`);
     }
+
+    return await this.web3.eth.sendSignedTransaction(signedTx.rawTransaction);
   }
 
   public async getRpcApiHttpHost(
@@ -220,15 +326,27 @@ export class OpenEthereumTestLedger {
     return `http://${lanAddress}:${thePort}`;
   }
 
+  public async getRpcApiWebSocketHost(
+    host?: string,
+    port?: number,
+  ): Promise<string> {
+    const thePort = port || (await this.getHostPortWs());
+    const lanIpV4OrUndefined = await internalIpV4();
+    const lanAddress = host || lanIpV4OrUndefined || "127.0.0.1"; // best effort...
+    return `ws://${lanAddress}:${thePort}`;
+  }
+
   public async stop(): Promise<void> {
     if (this._container) {
       await Containers.stop(this.container);
+      this._web3 = undefined;
     }
   }
 
   public destroy(): Promise<void> {
     const fnTag = `${this.className}#destroy()`;
     if (this._container) {
+      this._web3 = undefined;
       return this._container.remove();
     } else {
       const ex = new Error(`${fnTag} Container not found, nothing to destroy.`);
@@ -236,13 +354,21 @@ export class OpenEthereumTestLedger {
     }
   }
 
-  public async getHostPortHttp(): Promise<number> {
-    const fnTag = `${this.className}#getHostPortHttp()`;
+  private async getHostPort(port: number): Promise<number> {
+    const fnTag = `${this.className}#getHostPort()`;
     if (this._containerId) {
       const cInfo = await Containers.getById(this._containerId);
-      return Containers.getPublicPort(this.httpPort, cInfo);
+      return Containers.getPublicPort(port, cInfo);
     } else {
       throw new Error(`${fnTag} Container ID not set. Did you call start()?`);
     }
+  }
+
+  public async getHostPortHttp(): Promise<number> {
+    return this.getHostPort(this.httpPort);
+  }
+
+  public async getHostPortWs(): Promise<number> {
+    return this.getHostPort(this.wsPort);
   }
 }

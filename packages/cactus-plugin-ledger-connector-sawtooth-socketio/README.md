@@ -25,7 +25,7 @@ This plugin provides `Cactus` a way to interact with Hyperledger Sawtooth networ
 - node.js v12 (recommend: v12.20.2 or greater)
 
 ### Prerequisites
-- Please ensure that the destination ledger (default: [sawtooth-testnet](../../tools/docker/sawtooth-testnet)) is already launched.
+- Please ensure that the destination ledger (default: [sawtooth-all-in-one](../../tools/docker/sawtooth-all-in-one)) is already launched.
 
 ## Boot methods
 
@@ -46,12 +46,16 @@ This plugin provides `Cactus` a way to interact with Hyperledger Sawtooth networ
     ```
 
 ### Docker
+- This image depends on `cactus-cmd-socketio-server:latest` to be present in local store. **Make sure to follow docker build instructions in [cactus-cmd-socketio-server README](../../packages/cactus-cmd-socketio-server/README.md)) before bulding this image!**
+- Docker build process will use artifacts from the latest build. Make sure `./dist` contains the version you want to dockerize.
+
 ```
 # Build
+pushd ../../packages/cactus-cmd-socketio-server/ && docker build . -t cactus-cmd-socketio-server && popd
 docker build . -t cactus-plugin-ledger-connector-sawtooth-socketio
 
 # Run
-docker run -v/etc/cactus/:/etc/cactus -p 5140:5140 --net=sawtooth_net cactus-plugin-ledger-connector-sawtooth-socketio
+docker run -v/etc/cactus/:/etc/cactus -p 5140:5140 cactus-plugin-ledger-connector-sawtooth-socketio
 ```
 
 ### Manual
@@ -60,6 +64,10 @@ docker run -v/etc/cactus/:/etc/cactus -p 5140:5140 --net=sawtooth_net cactus-plu
 ```
 npm run start
 ```
+
+## Configuration
+- Validator can be configured in `/etc/cactus/connector-sawtooth-socketio/default.yaml` (see [sample-config](./sample-config/default.yaml) for details).
+- This configuration can be overwriten in `NODE_CONFIG` environment variable (JSON format).
 
 ## Usage samples
 - To confirm the operation of this package, please refer to the following business-logic sample application:

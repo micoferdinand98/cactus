@@ -1,4 +1,4 @@
-# Hyperledger Cactus Roadmap
+# Hyperledger Cacti Roadmap
 
 A living document with the maintainers' plans regarding the general direction of the project:
 
@@ -10,180 +10,77 @@ If you take on the burden of implementing a feature yourself no one should stop 
 
 For example: 
 * Support being added for new ledgers by implementing new connector plugins is always welcome.
-* On the other hand, if you want to repurpose Cactus to be the operating system for a driverless ice-cream truck you are developing that that **may** not get accepted by the maintainers even if you are happy to do all the work yourself. 
+* On the other hand, if you want to repurpose Cacti to be the operating system for a driverless ice-cream truck you are developing that that **may** not get accepted by the maintainers even if you are happy to do all the work yourself.
 
-# Quarterly Breakdown
+# Breakdown by each release
 
-## Terminology
+## Release plan
 
-Quarters are defined as:
+### Cacti V1 (= Cactus)
+- Date: 
+    - Start: March 2022
+    - Expired: ****
+- Goal:
+    - Ledger Connectors: Supply Ledger Connectors for all Hyperledger blockchains
+    - Integrating other projects: Integrate with Hyperledger-labs Weaver
+- Sub release
+    - [V1.0] First release of Cacti V1
+        - Date: March 2022
+        - Goal:
+            - Ledger Connectors – connectors to communicate with various blockchain platforms using multiple programming languages: (TypeScript and Python)
+                - Hyperledger Besu, Fabric, Indy, Iroha, Sawtooth
+                - Go-Ethereum, Quorum, Xdai
+                - Corda
+    - [V1.1] Improved version reflecting security-audit advice
+        - Date: October 2022
 
-- **Q1**: January, February, March
-- **Q2**: April, May, June
-- **Q3**: July, August, September
-- **Q4**: October, November, December
-
-Halves are defined as:
-
-- **H1**: Q1+Q2
-- **H2**: Q3+Q4
-
-## 2021 Q1
-
-**Features:** 
-
-1. Language Agnostic Plugin Development
-    * Vault Keychain Plugin written in Rust as a proof of concept
-2. HTLC plugin for Besu
-    * ETH
-    * ERC-20
-3. Corda Open Source Ledger Connector Plugin 
-    * Flow Invocation
-    * CordApp Deployment 
-4. Prometheus Monitoring
-5. Sawtooth Validator
-    * Block monitoring feature
-    * (Transaction request feature will be added later)
-6. test docker container for Sawtooth
-7. VerifierFactory
-    * to adapt Verifier to both of socket.io-typed Validator and OpenAPI-typed Validator
-8. BLP/electricity-trade
-    * BLP application integrating with Ethereum and Sawtooth
-9. prototype codes of auto-testing framework using Jest
-
-**Fixes:**
-
-1. Fabric 2.x Contract Deployment
-2. car-trade execution procedures
-
-**Security Fixes**
-
-1. Current vulnerable dependencies to be updated or removed (recurring roadmap item)
-
-**Documentation**
-
-1. Extend supply chain app example package with Fabric elements
+### Cacti V2
+- Date: 
+    - Start: March 2023 (planned)
+    - Expired: ****
+- Goal:
+    - To integrate different Cacti APIs to provide user-friendly APIs.  In detail, the goal is to combine the following strengths of existing APIs on Cacti V1 and Weaver to provide better functionality
+        - c.f.: APIs on Cacti V1
+            - OpenAPI-api-client users need to use slightly different names, data types between different ledger types.
+            - Verifier interface users only need to know four functions, but arguments passed to the function differs between different ledger types.
+            - Weaver interface.
+        - Notes: The above goal will make some of Cacti V1 features incompatibilities on Cacti V2
+- Sub release
+  *Note*: We envision three phases of evolution of the Cacti code base until the creation of a single undifferentiated platform offering a spectrum of features.
+    - [V2.0-alpha] First release of the merged version of Cactus and Weaver
+        - Date: February 2023 (completed)
+        - Status:
+            - The present version of the Cacti code base is simply an aggregation of the legacy Cactus and Weaver code bases with their original folder structures.
+            - Until merge and integration (see further below), users should examine, test, and use them separately as follows:
+                - Cactus code and documentation lies within this (root) folder, excluding the `weaver` folder. See [Cactus documentation](./README-cactus.md) to test and use Cactus.
+                - Weaver code and documentation lies within the [weaver](./weaver/) folder. See [Weaver documentation](./weaver/README.md) to test and use Weaver.
+              We will soon integrate the Github Workflows and publish packages under the `hyperledger/cacti` namespace. Watch out for updates!
+    - [V2.0-beta]
+        - Date: April 2023 (planned)
+        - Goal:
+            - Large-scale refactoring of the code base to create a common pipeline for triggering and orchestration of cross-ledger transactions, with Cactus and Weaver features selectable but without changing Cactus or Weaver code internals. The Cacti architecture diagram representing this phases is illustrated below.
+              <img src="./images/cacti-architecture-v1-merge.png">
+            - Add a GUI transaction viewer tool for Hyperledger Cacti 
+    - [V2.0]
+        - Date: June 2023 (planned)
+        - Goal:
+            - Enhance the code quality of V2.0-beta
+            - Integrate modules and libraries of Cactus and Weaver code bases performing similar functions to eliminate redundancy and offer a common Cacti SDK and API.
+            - Refactor the connectors and system contracts to implement an integrated ledger access mechanism while supporting all legacy Cactus and Weaver ledger operations for supported DLTs. The Cacti architecture diagram representing this phases is illustrated below.
+              <img src="./images/cacti-architecture-v2-integration.png">
+              *Note*: The *Core Operators* module refers to operations that can be carried out through direct ledger-facing procedures or APIs. In many DLTs, these procedures will take the form of smart contracts.
 
 
-## 2021 Q2
+## Notes
 
-**Features**
-
-1. Keychain Plugin Implementations:
-    * AWS Secret Manager
-2. Indy Validator
-3. test docker container for Indy
-4. test docker container for Iroha
-
-**Fixes:**
-
-`N/A`
-
-**Security Fixes**:
-
-1. Current vulnerable dependencies to be updated or removed (recurring roadmap item)
-
-**Documentation**
-
-1. Climate Action SIG Example Implementation
-2. Cactus ReadTheDocs Site
-
-## 2021 Q3
-
-**Checkpoints for releasing V1-RC**
-
-1. **Validator**
-    - Validators for Hyperledger ledgers (Fabric, Sawtooth, Besu, Indy, Iroha), Quorum, Go-Ethereum, and Corda
-
-2. **Verifier**
-    - All sync/async requests from BLP must communicate with  Validator (toward ledgers) via Verifier
-    - transaction signer features for Hyperledger ledgers (Fabric, Sawtooth, Besu, Indy, Iroha), Quorum, Go-Ethereum, and Corda
-
-3. **BLP-attached optional plugins**
-
-4. **BLP applications**
-    - BLP applications using each ledger of Hyperledger ledgers (Fabric, Sawtooth, Besu, Indy, Iroha), Quorum, Go-Ethereum, and Corda
-
-5. **Test ledger tools**
-    - Ledger tools for Hyperledger ledgers (Fabric, Sawtooth, Besu, Indy, Iroha), Quorum, Go-Ethereum, and Corda
-
-6. **Service API and Admin API**
-    - SDK for BLP
-    - SDK for LedgerPlugin
-
-7. **Support tools**
-
-8. **Dockernize**
-    - Dockernize Cactus Node Server
-    - Dockernize Cactus validators for the ledgers of Hyperledger ledgers (Fabric, Sawtooth, Besu, Indy, Iroha), Quorum, Go-Ethereum, and Corda
-
-9. **Error handing**
-    - (Error cases will be listed soon)
-
-10. **Satisfying the test items to ensure quality**
-    - (TBA)
-
-11. **Others**
-    - Method for providing packages
-    - refactor config files on /etc/cactus of server directory
-
-**Features**
-
-1. Keychain Plugin Implementations:
-    * Azure Key Vault
-3. Besu Private Transactions
-4. Fabric Private Transactions
-6. transaction signer features
-    * Hyperledger ledgers (Iroha, Sawtooth, Fabric v2, Indy, Quorum, Corda)
-7. SDK for BLP
-8. SDK for LedgerPlugin
-9.  Dockernize
-10. Method for providing packages
-11. refactor config files on /etc/cactus of server directory
-12. Error Handling
-
-**Fixes:**
-
-**Security Fixes**:
-
-1. Current vulnerable dependencies to be updated or removed (recurring roadmap item)
-
-**Documentation**
-
-## 2021 Q4
-
-**Features**
-
-1. Corda Enterprise Support [#877](https://github.com/hyperledger/cactus/issues/877)
-2. Multi-protocol Support in the API Server: [#503](https://github.com/hyperledger/cactus/issues/503)
-3. Support WebAssembly Modules as Plugins [#1281](https://github.com/hyperledger/cactus/issues/1281)
-4. Indy powered Consortium Plugin Implementation [#675](https://github.com/hyperledger/cactus/issues/675)
-    * With at least one of the examples using it as well
-
-**Fixes:**
-
-**Security Fixes**:
-
-1. Current vulnerable dependencies to be updated or removed (recurring roadmap item)
-2. CII Best Practices 100% Compliance [#357](https://github.com/hyperledger/cactus/issues/357)
-   * Fuzzer security testing
-   * Vulnerability disclosures
-
-**Documentation**
-
-1. Atomic Swaps Example
-    * CBDC, bonds for cash
-2. Green aluminum use-case with BAFT DLPCs
-    * In partnership with the Hyperledger Trace Finance SIG
-3. Cloud deployment playbook(s)
-   * Kubernetes Integration
-     * Helm Charts
-     * KNative
-     * Minikube based end to end testing
-4. Public Test Deployment of a Cactus Consortium
-    * Multiple nodes/API servers scenarios covered
-    * Public domain: https://cactus.stream
-5. Reproducible benchmarks
-    * Scripts to pull up and tear down cloud provider resources automatically
-    * Benchmarks to be published 
-    * Emphasize the horizontal scalability of the API server to showcase the stateless design
+- Versioning:
+    - When we release a new version which does not include API incompatibilities, we should not increment MAJOR version number, according to [SemVer](https://semver.org/) principle.
+- Terminology
+    - Quarters are defined as:
+        - **Q1**: January, February, March
+        - **Q2**: April, May, June
+        - **Q3**: July, August, September
+        - **Q4**: October, November, December
+    - Halves are defined as:
+        - **H1**: Q1+Q2
+        - **H2**: Q3+Q4

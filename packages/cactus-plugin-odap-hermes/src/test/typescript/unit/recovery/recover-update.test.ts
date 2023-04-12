@@ -28,8 +28,14 @@ import {
   checkValidRecoverUpdateMessage,
   sendRecoverUpdateMessage,
 } from "../../../../main/typescript/gateway/recovery/recover-update";
-import { knexClientConnection, knexServerConnection } from "../../knex.config";
+
 import { checkValidRecoverMessage } from "../../../../main/typescript/gateway/recovery/recover";
+import { BesuOdapGateway } from "../../../../main/typescript/gateway/besu-odap-gateway";
+import { FabricOdapGateway } from "../../../../main/typescript/gateway/fabric-odap-gateway";
+import { ClientGatewayHelper } from "../../../../main/typescript/gateway/client/client-helper";
+import { ServerGatewayHelper } from "../../../../main/typescript/gateway/server/server-helper";
+
+import { knexClientConnection, knexServerConnection } from "../../knex.config";
 
 const logLevel: LogLevelDesc = "TRACE";
 
@@ -98,6 +104,8 @@ beforeEach(async () => {
     instanceId: uuidV4(),
     ipfsPath: ipfsApiHost,
     keyPair: Secp256k1Keys.generateKeyPairsBuffer(),
+    clientHelper: new ClientGatewayHelper(),
+    serverHelper: new ServerGatewayHelper(),
     knexConfig: knexClientConnection,
   };
   const recipientGatewayConstructor = {
@@ -106,11 +114,13 @@ beforeEach(async () => {
     instanceId: uuidV4(),
     ipfsPath: ipfsApiHost,
     keyPair: Secp256k1Keys.generateKeyPairsBuffer(),
+    clientHelper: new ClientGatewayHelper(),
+    serverHelper: new ServerGatewayHelper(),
     knexConfig: knexServerConnection,
   };
 
-  pluginSourceGateway = new PluginOdapGateway(sourceGatewayConstructor);
-  pluginRecipientGateway = new PluginOdapGateway(recipientGatewayConstructor);
+  pluginSourceGateway = new FabricOdapGateway(sourceGatewayConstructor);
+  pluginRecipientGateway = new BesuOdapGateway(recipientGatewayConstructor);
 
   if (
     pluginSourceGateway.database == undefined ||
@@ -195,9 +205,8 @@ test("check valid built of recover update message", async () => {
     data: JSON.stringify(sessionData),
   };
 
-  new Promise((resolve) => setTimeout(resolve, 1000));
   const firstTimestamp = Date.now().toString();
-  new Promise((resolve) => setTimeout(resolve, 1000));
+  await new Promise((resolve) => setTimeout(resolve, 5000));
 
   await pluginSourceGateway.storeOdapLog(odapLog1);
 
@@ -238,7 +247,6 @@ test("check valid built of recover update message", async () => {
     newBasePath: "",
   };
 
-  expect(1).toBe(1);
   recoverMessage.signature = PluginOdapGateway.bufArray2HexStr(
     pluginSourceGateway.sign(JSON.stringify(recoverMessage)),
   );
@@ -255,6 +263,7 @@ test("check valid built of recover update message", async () => {
     throw new Error("Test Failed");
   }
 
+  console.log(recoverUpdateMessage.recoveredLogs);
   expect(recoverUpdateMessage.recoveredLogs.length).toBe(3);
 
   await checkValidRecoverUpdateMessage(

@@ -14,30 +14,37 @@ import {
   Servers,
 } from "@hyperledger/cactus-common";
 import { Configuration } from "@hyperledger/cactus-core-api";
-import {
-  IPluginOdapGatewayConstructorOptions,
-  PluginOdapGateway,
-} from "../../../main/typescript/gateway/plugin-odap-gateway";
 import { GoIpfsTestContainer } from "@hyperledger/cactus-test-tooling";
 import {
   AssetProfile,
   ClientV1Request,
 } from "../../../main/typescript/public-api";
-import { sendTransferInitializationRequest } from "../../../main/typescript/gateway/client/transfer-initialization";
-import { checkValidInitializationRequest } from "../../../main/typescript/gateway/server/transfer-initialization";
 import { makeSessionDataChecks } from "../make-checks";
-import { knexClientConnection, knexServerConnection } from "../knex.config";
+import {
+  IFabricOdapGatewayConstructorOptions,
+  FabricOdapGateway,
+} from "../../../main/typescript/gateway/fabric-odap-gateway";
+import {
+  IBesuOdapGatewayConstructorOptions,
+  BesuOdapGateway,
+} from "../../../main/typescript/gateway/besu-odap-gateway";
+import { ClientGatewayHelper } from "../../../main/typescript/gateway/client/client-helper";
+import { ServerGatewayHelper } from "../../../main/typescript/gateway/server/server-helper";
+
+import { knexClientConnection } from "../knex.config";
 
 const MAX_RETRIES = 5;
 const MAX_TIMEOUT = 5000;
 
-const logLevel: LogLevelDesc = "TRACE";
+const FABRIC_ASSET_ID = uuidv4();
+const BESU_ASSET_ID = uuidv4();
 
-let odapServerGatewayPluginOptions: IPluginOdapGatewayConstructorOptions;
-let odapClientGatewayPluginOptions: IPluginOdapGatewayConstructorOptions;
+const logLevel: LogLevelDesc = "INFO";
 
-let pluginSourceGateway: PluginOdapGateway;
-let pluginRecipientGateway: PluginOdapGateway;
+let odapClientGatewayPluginOptions: IFabricOdapGatewayConstructorOptions;
+let odapServerGatewayPluginOptions: IBesuOdapGatewayConstructorOptions;
+let pluginSourceGateway: FabricOdapGateway;
+let pluginRecipientGateway: BesuOdapGateway;
 
 let ipfsContainer: GoIpfsTestContainer;
 let ipfsApiHost: string;
@@ -109,7 +116,8 @@ beforeAll(async () => {
       instanceId: uuidv4(),
       ipfsPath: ipfsApiHost,
       keyPair: Secp256k1Keys.generateKeyPairsBuffer(),
-      knexConfig: knexServerConnection,
+      clientHelper: new ClientGatewayHelper(),
+      serverHelper: new ServerGatewayHelper(),
     };
 
     serverExpressApp = express();
@@ -128,7 +136,7 @@ beforeAll(async () => {
     const { address, port } = addressInfo;
     odapServerGatewayApiHost = `http://${address}:${port}`;
 
-    pluginRecipientGateway = new PluginOdapGateway(
+    pluginRecipientGateway = new BesuOdapGateway(
       odapServerGatewayPluginOptions,
     );
 
@@ -147,6 +155,8 @@ beforeAll(async () => {
       instanceId: uuidv4(),
       ipfsPath: ipfsApiHost,
       keyPair: Secp256k1Keys.generateKeyPairsBuffer(),
+      clientHelper: new ClientGatewayHelper(),
+      serverHelper: new ServerGatewayHelper(),
       knexConfig: knexClientConnection,
     };
 
@@ -166,7 +176,7 @@ beforeAll(async () => {
     const { address, port } = addressInfo;
     odapClientGatewayApiHost = `http://${address}:${port}`;
 
-    pluginSourceGateway = new PluginOdapGateway(odapClientGatewayPluginOptions);
+    pluginSourceGateway = new FabricOdapGateway(odapClientGatewayPluginOptions);
 
     if (pluginSourceGateway.database == undefined) {
       throw new Error("Database is not correctly initialized");
@@ -208,6 +218,8 @@ beforeAll(async () => {
       serverIdentityPubkey: "",
       maxRetries: MAX_RETRIES,
       maxTimeout: MAX_TIMEOUT,
+      sourceLedgerAssetID: FABRIC_ASSET_ID,
+      recipientLedgerAssetID: BESU_ASSET_ID,
     };
   }
 });
@@ -215,7 +227,7 @@ beforeAll(async () => {
 test("server gateway crashes after transfer initiation flow", async () => {
   const sessionID = pluginSourceGateway.configureOdapSession(odapClientRequest);
 
-  const transferInitializationRequest = await sendTransferInitializationRequest(
+  const transferInitializationRequest = await pluginSourceGateway.clientHelper.sendTransferInitializationRequest(
     sessionID,
     pluginSourceGateway,
     false,
@@ -226,7 +238,7 @@ test("server gateway crashes after transfer initiation flow", async () => {
     return;
   }
 
-  await checkValidInitializationRequest(
+  await pluginRecipientGateway.serverHelper.checkValidInitializationRequest(
     transferInitializationRequest,
     pluginRecipientGateway,
   );
@@ -246,9 +258,7 @@ test("server gateway crashes after transfer initiation flow", async () => {
 
   await Servers.listen(listenOptions);
 
-  pluginRecipientGateway = new PluginOdapGateway(
-    odapServerGatewayPluginOptions,
-  );
+  pluginRecipientGateway = new BesuOdapGateway(odapServerGatewayPluginOptions);
   await pluginRecipientGateway.registerWebServices(serverExpressApp);
 
   // server gateway self-healed and is back online

@@ -66,6 +66,13 @@ export {
 } from "./iroha/iroha-test-ledger";
 
 export {
+  Iroha2TestLedger,
+  IIroha2TestLedgerOptions,
+  IROHA2_TEST_LEDGER_DEFAULT_OPTIONS,
+  Iroha2ClientConfig,
+} from "./iroha/iroha2-test-ledger";
+
+export {
   PostgresTestContainer,
   IPostgresTestContainerConstructorOptions,
   POSTGRES_TEST_CONTAINER_DEFAULT_OPTIONS,
@@ -153,6 +160,12 @@ export {
   K_DEFAULT_RUSTC_CONTAINER_CMD,
   RustcContainer,
 } from "./rustc-container/rustc-container";
+
+export {
+  ISawtoothTestLedgerOptions,
+  SAWTOOTH_LEDGER_DEFAULT_OPTIONS,
+  SawtoothTestLedger,
+} from "./sawtooth/sawtooth-test-ledger";
 
 export {
   ISubstrateTestLedgerOptions,

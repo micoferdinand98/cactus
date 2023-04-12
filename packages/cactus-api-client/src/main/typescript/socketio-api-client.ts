@@ -19,9 +19,24 @@ import { ISocketApiClient } from "@hyperledger/cactus-core-api";
 import { Socket, SocketOptions, ManagerOptions, io } from "socket.io-client";
 import { readFileSync } from "fs";
 import { resolve as resolvePath } from "path";
-import { verify, VerifyOptions, VerifyErrors, JwtPayload } from "jsonwebtoken";
+import {
+  verify,
+  VerifyOptions,
+  VerifyErrors,
+  JwtPayload,
+  Algorithm,
+} from "jsonwebtoken";
 import { Observable, ReplaySubject } from "rxjs";
 import { finalize } from "rxjs/operators";
+
+const supportedJwtAlgos: Algorithm[] = [
+  "ES256",
+  "ES384",
+  "ES512",
+  "RS256",
+  "RS384",
+  "RS512",
+];
 
 /**
  * Default logic for validating responses from socketio connector (validator).
@@ -36,7 +51,7 @@ export function verifyValidatorJwt(
 ): Promise<JwtPayload> {
   return new Promise((resolve, reject) => {
     const option: VerifyOptions = {
-      algorithms: ["ES256", "ES384", "ES512", "RS256", "RS384", "RS512"],
+      algorithms: supportedJwtAlgos,
     };
 
     verify(
@@ -180,6 +195,11 @@ export class SocketIOApiClient implements ISocketApiClient<SocketLedgerEvent> {
     method: Record<string, unknown>,
     args: any,
   ): Promise<any> {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    // `Function` is used by socketio `socket.off()` method
+    // eslint-disable-next-line @typescript-eslint/ban-types
+    const freeableListeners = new Map<string, Function>();
+
     return new Promise((resolve, reject) => {
       this.log.debug("call : sendSyncRequest");
 
@@ -198,22 +218,31 @@ export class SocketIOApiClient implements ISocketApiClient<SocketLedgerEvent> {
         const reqID = this.genarateReqID();
         this.log.debug(`##sendSyncRequest, reqID = ${reqID}`);
 
-        this.socket.on("connect_error", (err: Error) => {
+        const connectErrorHandler = (err: Error) => {
           this.log.error("##connect_error:", err);
           this.socket.disconnect();
           reject(err);
-        });
-        this.socket.on("connect_timeout", (err: Record<string, unknown>) => {
+        };
+        this.socket.on("connect_error", connectErrorHandler);
+        freeableListeners.set("connect_error", connectErrorHandler);
+
+        const connectTimeoutHandler = (err: Record<string, unknown>) => {
           this.log.error("####Error:", err);
           this.socket.disconnect();
           reject(err);
-        });
-        this.socket.on("error", (err: Record<string, unknown>) => {
+        };
+        this.socket.on("connect_timeout", connectTimeoutHandler);
+        freeableListeners.set("connect_timeout", connectTimeoutHandler);
+
+        const errorHandler = (err: Record<string, unknown>) => {
           this.log.error("####Error:", err);
           this.socket.disconnect();
           reject(err);
-        });
-        this.socket.on("response", (result: any) => {
+        };
+        this.socket.on("error", errorHandler);
+        freeableListeners.set("error", errorHandler);
+
+        const responseHandler = (result: any) => {
           this.log.debug("#[recv]response, res:", result);
           if (reqID === result.id) {
             responseFlag = true;
@@ -238,12 +267,17 @@ export class SocketIOApiClient implements ISocketApiClient<SocketLedgerEvent> {
                 })
                 .catch((err) => {
                   responseFlag = false;
-                  this.log.debug("checkValidator error:", err);
-                  this.log.error(err);
+                  this.log.error("checkValidator error:", err);
+                  reject({
+                    status: 504,
+                    error: err,
+                  });
                 });
             }
           }
-        });
+        };
+        this.socket.on("response", responseHandler);
+        freeableListeners.set("response", responseHandler);
 
         // Call Validator
         const requestData = {
@@ -260,7 +294,7 @@ export class SocketIOApiClient implements ISocketApiClient<SocketLedgerEvent> {
         const timeoutMilliseconds =
           this.options.syncFunctionTimeoutMillisecond ||
           defaultSyncFunctionTimeoutMillisecond;
-        setTimeout(() => {
+        timeout = setTimeout(() => {
           if (responseFlag === false) {
             this.log.debug("requestTimeout reqID:", reqID);
             resolve({ status: 504 });
@@ -269,6 +303,13 @@ export class SocketIOApiClient implements ISocketApiClient<SocketLedgerEvent> {
       } catch (err) {
         this.log.error("##Error: sendSyncRequest:", err);
         reject(err);
+      }
+    }).finally(() => {
+      freeableListeners.forEach((listener, eventName) =>
+        this.socket.off(eventName, listener),
+      );
+      if (timeout) {
+        clearTimeout(timeout);
       }
     });
   }
@@ -292,6 +333,14 @@ export class SocketIOApiClient implements ISocketApiClient<SocketLedgerEvent> {
     } else {
       this.log.debug("Create new observable subject...");
 
+      // `Function` is used by socketio `socket.off()` method
+      // eslint-disable-next-line @typescript-eslint/ban-types
+      const freeableListeners = new Map<string, Function>();
+      const freeListeners = () =>
+        freeableListeners.forEach((listener, eventName) =>
+          this.socket.off(eventName, listener),
+        );
+
       this.monitorSubject = new ReplaySubject<SocketLedgerEvent>(0);
 
       this.log.debug("call : startMonitor");
@@ -300,38 +349,46 @@ export class SocketIOApiClient implements ISocketApiClient<SocketLedgerEvent> {
           `##in startMonitor, validatorUrl = ${this.options.validatorURL}`,
         );
 
-        this.socket.on("connect_error", (err: Error) => {
+        const connectErrorHandler = (err: Error) => {
           this.log.error("##connect_error:", err);
           this.socket.disconnect();
           if (this.monitorSubject) {
             this.monitorSubject.error(err);
           }
-        });
+        };
+        this.socket.on("connect_error", connectErrorHandler);
+        freeableListeners.set("connect_error", connectErrorHandler);
 
-        this.socket.on("connect_timeout", (err: Record<string, unknown>) => {
+        const connectTimeoutHandler = (err: Record<string, unknown>) => {
           this.log.error("####Error:", err);
           this.socket.disconnect();
           if (this.monitorSubject) {
             this.monitorSubject.error(err);
           }
-        });
+        };
+        this.socket.on("connect_timeout", connectTimeoutHandler);
+        freeableListeners.set("connect_timeout", connectTimeoutHandler);
 
-        this.socket.on("error", (err: Record<string, unknown>) => {
+        const errorHandler = (err: Record<string, unknown>) => {
           this.log.error("####Error:", err);
           this.socket.disconnect();
           if (this.monitorSubject) {
             this.monitorSubject.error(err);
           }
-        });
+        };
+        this.socket.on("error", errorHandler);
+        freeableListeners.set("error", errorHandler);
 
-        this.socket.on("monitor_error", (err: Record<string, unknown>) => {
+        const monitorErrorHandler = (err: Record<string, unknown>) => {
           this.log.error("#### Monitor Error:", err);
           if (this.monitorSubject) {
             this.monitorSubject.error(err);
           }
-        });
+        };
+        this.socket.on("monitor_error", monitorErrorHandler);
+        freeableListeners.set("monitor_error", monitorErrorHandler);
 
-        this.socket.on("eventReceived", (res: any) => {
+        const eventReceivedHandler = (res: any) => {
           // output the data received from the client
           this.log.debug("#[recv]eventReceived, res:", res);
 
@@ -349,7 +406,9 @@ export class SocketIOApiClient implements ISocketApiClient<SocketLedgerEvent> {
             .catch((err) => {
               this.log.error(err);
             });
-        });
+        };
+        this.socket.on("eventReceived", eventReceivedHandler);
+        freeableListeners.set("eventReceived", eventReceivedHandler);
 
         const emitStartMonitor = () => {
           this.log.debug("##emit: startMonitor");
@@ -363,27 +422,33 @@ export class SocketIOApiClient implements ISocketApiClient<SocketLedgerEvent> {
         if (this.socket.connected) {
           emitStartMonitor();
         } else {
-          this.socket.on("connect", () => {
+          const connectHandler = () => {
             this.log.debug("#connect");
             emitStartMonitor();
-          });
+          };
+          this.socket.on("connect", connectHandler);
+          freeableListeners.set("connect", connectHandler);
         }
+
+        return this.monitorSubject.pipe(
+          finalize(() => {
+            if (this.monitorSubject && !this.monitorSubject.observed) {
+              // Last observer finished
+              this.log.debug("##emit: stopMonitor");
+              this.socket.emit("stopMonitor");
+              freeListeners();
+              this.monitorSubject = undefined;
+            }
+          }),
+        );
       } catch (err) {
         this.log.error(`##Error: startMonitor, ${err}`);
+        freeListeners();
         this.monitorSubject.error(err);
       }
-
-      return this.monitorSubject.pipe(
-        finalize(() => {
-          if (this.monitorSubject && !this.monitorSubject.observed) {
-            // Last observer finished
-            this.log.debug("##emit: stopMonitor");
-            this.socket.emit("stopMonitor");
-            this.monitorSubject = undefined;
-          }
-        }),
-      );
     }
+
+    return this.monitorSubject;
   }
 
   /**

@@ -1,0 +1,43 @@
+name: publish-npm-manually
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag-pub:
+        type: string
+        description: Tag to publish
+        required: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  build-and-publish-packages:
+    runs-on: buildjet-2vcpu-ubuntu-2004
+    steps:
+    - uses: actions/checkout@v3.1.0
+      with:
+        ref: ${{ inputs.tag-pub }}
+    - run: git fetch --unshallow --prune
+    - uses: actions/setup-node@v3.6.0
+      with:
+        always-auth: true
+        node-version: '16.14.2'
+        registry-url: 'https://registry.npmjs.org'
+    - name: ./tools/ci.sh
+      run: ./tools/ci.sh
+      env:
+        DEV_BUILD_DISABLED: false
+        FULL_BUILD_DISABLED: false
+        JEST_TEST_RUNNER_DISABLED: true
+        TAPE_TEST_RUNNER_DISABLED: true
+    - name: lerna-publish
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      run: |
+        git config --global user.email "npm-ci@hyperledger.org"
+        git config --global user.name "hyperledger-ghci"
+        npm whoami
+        yarn lerna publish from-git --yes --loglevel=debug

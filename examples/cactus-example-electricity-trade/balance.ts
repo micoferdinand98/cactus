@@ -6,7 +6,7 @@
  */
 
 import { Router, NextFunction, Request, Response } from "express";
-import { ConfigUtil, RIFError } from "@hyperledger/cactus-cmd-socket-server";
+import { ConfigUtil, RIFError } from "@hyperledger/cactus-cmd-socketio-server";
 import { BalanceManagement } from "./BalanceManagement";
 
 const config: any = ConfigUtil.getConfig();
@@ -32,7 +32,9 @@ router.get("/:account", (req: Request, res: Response, next: NextFunction) => {
         logger.error(err);
       });
   } catch (err) {
-    logger.error(`##err name: ${err.constructor.name}`);
+    if (err instanceof Error) {
+      logger.error(`##err name: ${err.constructor.name}`);
+    }
 
     if (err instanceof RIFError) {
       logger.debug(`##catch RIFError, ${err.statusCode}, ${err.message}`);

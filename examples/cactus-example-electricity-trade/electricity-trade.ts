@@ -10,7 +10,7 @@ import {
   TransactionManagement,
   RIFError,
   ConfigUtil,
-} from "@hyperledger/cactus-cmd-socket-server";
+} from "@hyperledger/cactus-cmd-socketio-server";
 import escapeHtml from "escape-html";
 
 const config: any = ConfigUtil.getConfig();
@@ -48,13 +48,14 @@ router.post(
   "/meter/register/",
   (req: Request, res: Response, next: NextFunction) => {
     try {
-      const result = transactionManagement.setBusinessLogicConfig(req);
+      const result = transactionManagement.setBusinessLogicConfig(req) as any;
 
       if (!result) {
         throw new RIFError("Error when running setBusinessLogicConfig");
       }
 
       let status = 200;
+
       if (result["action"] === "add") {
         status = 201;
       }
@@ -68,7 +69,7 @@ router.post(
 
       next(err);
     }
-  }
+  },
 );
 
 export default router;

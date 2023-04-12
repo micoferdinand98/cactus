@@ -1,7 +1,10 @@
 {
   "name": "@hyperledger/cactus-plugin-ledger-connector-go-ethereum-socketio",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "start": "cd ./dist && node common/core/bin/www.js",
     "debug": "nodemon --inspect ./dist/common/core/bin/www.js",
@@ -11,23 +14,27 @@
     "init-ethereum": "cp -af ../../yarn.lock ./dist/yarn.lock"
   },
   "dependencies": {
+    "@hyperledger/cactus-cmd-socketio-server": "1.2.0",
+    "@hyperledger/cactus-common": "1.2.0",
     "@types/node": "14.17.32",
     "body-parser": "1.17.2",
-    "config": "3.3.7",
     "cookie-parser": "1.4.6",
-    "debug": "4.1.1",
+    "debug": "3.1.0",
     "express": "4.17.3",
-    "fast-safe-stringify": "2.1.1",
+    "http-errors": "1.6.3",
     "js-yaml": "3.14.1",
-    "jsonwebtoken": "8.5.1",
+    "jsonwebtoken": "9.0.0",
     "log4js": "6.4.1",
     "morgan": "1.10.0",
     "serve-favicon": "2.4.5",
     "shelljs": "0.8.5",
     "socket.io": "4.4.1",
-    "web3": "0.20.7"
+    "web3": "1.8.1"
   },
   "devDependencies": {
+    "@hyperledger/cactus-api-client": "1.2.0",
+    "@hyperledger/cactus-common": "1.2.0",
+    "@hyperledger/cactus-test-tooling": "1.2.0",
     "@types/config": "0.0.41"
   }
 }

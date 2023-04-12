@@ -9,17 +9,19 @@
       "extensions/cactus-*"
     ],
     "nohoist": [
-      "**/iroha-helpers-ts"
+      "**/iroha-helpers"
     ]
   },
+  "packageManager": "yarn@1.22.17",
   "scripts": {
     "run-ci": "./tools/ci.sh",
     "reset:node-modules": "del-cli '**/node_modules'",
     "reset:git": "git clean -f -X",
-    "reset:yarn-lock": "yarn install --update-checksums --force",
+    "reset:yarn-lock": "yarn run init-registries && yarn install --update-checksums --force",
     "reset": "run-s reset:git reset:node-modules reset:yarn-lock configure",
-    "configure": "yarn install --frozen-lockfile --non-interactive && yarn run build:dev:backend",
+    "configure": "yarn run init-registries && yarn install --frozen-lockfile --non-interactive && yarn run build:dev:backend",
     "install-yarn": "npm install --global yarn@1.22.17",
+    "enable-corepack": "npm i -g corepack && corepack enable && corepack prepare yarn@1.22.17 --activate",
     "custom-checks": "TS_NODE_PROJECT=./tools/tsconfig.json node --trace-deprecation --experimental-modules --abort-on-uncaught-exception --loader ts-node/esm --experimental-specifier-resolution=node ./tools/custom-checks/run-custom-checks.ts",
     "tools:validate-bundle-names": "TS_NODE_PROJECT=./tools/tsconfig.json node --trace-deprecation --experimental-modules --abort-on-uncaught-exception --loader ts-node/esm --experimental-specifier-resolution=node ./tools/validate-bundle-names.js",
     "generate-api-server-config": "node ./tools/generate-api-server-config.js",
@@ -68,16 +70,17 @@
     "version": "npm ci && npm run build:dev && npm run build:prod && npm run test:unit",
     "lerna-publish-canary": "npm run run-ci && lerna publish --canary --force-publish --dist-tag $(git branch --show-current) --preid $(git branch --show-current).$(git rev-parse --short HEAD)",
     "lerna-publish": "lerna publish --conventional-commits --sign-git-commit --sign-git-tag",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "init-registries": "npm config set @iroha2:registry=https://nexus.iroha.tech/repository/npm-group/"
   },
   "devDependencies": {
     "@commitlint/cli": "13.1.0",
     "@commitlint/config-conventional": "13.1.0",
     "@openapitools/openapi-generator-cli": "2.4.14",
-    "@lerna-lite/cli": "1.4.0",
-    "@lerna-lite/exec": "1.4.0",
-    "@lerna-lite/list": "1.4.0",
-    "@lerna-lite/run": "1.4.0",
+    "@lerna-lite/cli": "1.17.0",
+    "@lerna-lite/exec": "1.17.0",
+    "@lerna-lite/list": "1.17.0",
+    "@lerna-lite/run": "1.17.0",
     "@types/fs-extra": "9.0.12",
     "@types/jasminewd2": "2.0.10",
     "@types/jest": "27.5.0",
@@ -95,7 +98,7 @@
     "crypto-browserify": "3.12.0",
     "cspell": "5.6.6",
     "del-cli": "4.0.1",
-    "electron": "15.5.5",
+    "electron": "18.3.7",
     "es-main": "1.0.2",
     "eslint": "7.32.0",
     "eslint-config-prettier": "8.3.0",
@@ -115,7 +118,7 @@
     "inquirer": "8.1.2",
     "jest": "28.1.0",
     "jest-extended": "2.0.0",
-    "json5": "2.2.0",
+    "json5": "2.2.2",
     "karma": "6.3.16",
     "karma-chrome-launcher": "3.1.0",
     "karma-electron": "7.0.0",
@@ -141,7 +144,7 @@
     "ts-loader": "9.2.5",
     "ts-node": "10.7.0",
     "typescript": "4.3.5",
-    "webpack": "5.50.0",
+    "webpack": "5.76.0",
     "webpack-bundle-analyzer": "4.4.2",
     "webpack-cli": "4.7.2"
   },

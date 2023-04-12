@@ -12,17 +12,61 @@
  */
 
 // configuration file
-import * as config from "../common/core/config";
+import {
+  configRead,
+  signMessageJwt,
+} from "@hyperledger/cactus-cmd-socketio-server";
 // Log settings
 import { getLogger } from "log4js";
 const logger = getLogger("ServerPlugin[" + process.pid + "]");
-logger.level = config.read("logLevel", "info");
+logger.level = configRead("logLevel", "info");
 // utility
 import * as SplugUtil from "./PluginUtil";
-import { ValidatorAuthentication } from "./ValidatorAuthentication";
 // Load libraries, SDKs, etc. according to specifications of endchains as needed
-const Web3 = require("web3");
-import safeStringify from "fast-safe-stringify";
+import Web3 from "web3";
+import { AbiItem } from "web3-utils";
+import { BlockNumber } from "web3-core";
+import { safeStringifyException } from "@hyperledger/cactus-common";
+
+const WEB3_HTTP_PROVIDER_OPTIONS = {
+  keepAlive: true,
+};
+
+const WEB3_WS_PROVIDER_OPTIONS = {
+  // Enable auto reconnection
+  reconnect: {
+    auto: true,
+    delay: 3000, // ms
+    maxAttempts: 30,
+    onTimeout: false,
+  },
+};
+
+function getWeb3Provider(host: string) {
+  const hostUrl = new URL(host);
+
+  switch (hostUrl.protocol) {
+    case "http:":
+    case "https:":
+      return new Web3.providers.HttpProvider(host, WEB3_HTTP_PROVIDER_OPTIONS);
+    case "ws:":
+      return new Web3.providers.WebsocketProvider(
+        host,
+        WEB3_WS_PROVIDER_OPTIONS,
+      );
+    default:
+      throw new Error(
+        `Unknown host protocol ${hostUrl.protocol} in URL ${host}`,
+      );
+  }
+}
+
+const web3Provider = getWeb3Provider(configRead("ledgerUrl"));
+const web3 = new Web3(web3Provider);
+
+export function shutdown() {
+  web3Provider.disconnect();
+}
 
 /*
  * ServerPlugin
@@ -55,8 +99,137 @@ export class ServerPlugin {
     }
   }
 
-  // Define an arbitrary function and implement it according to specifications of end-chains
   /*
+   * getBlock
+   *
+   * @param {String|Number} block hash, block number or string:"earliest", "latest" or "pending"
+   *
+   * @return {Object} JSON object
+   */
+
+  async getBlock(args: any) {
+    logger.debug("getBlock start");
+
+    const blockID: BlockNumber = args.args.args[0];
+    const returnTransactionObjects = args.args.args[1] ?? false;
+    const reqID = args["reqID"];
+
+    if (!blockID) {
+      const emsg = "JSON parse error!";
+      logger.warn(emsg);
+      throw {
+        resObj: {
+          status: 504,
+          errorDetail: emsg,
+        },
+        id: reqID,
+      };
+    }
+
+    try {
+      const blockData = await web3.eth.getBlock(
+        blockID,
+        returnTransactionObjects,
+      );
+      const result = {
+        blockData: blockData,
+      };
+      logger.debug(`getBlock(): result: ${result}`);
+
+      const signedResults = signMessageJwt({ result });
+      logger.debug(`getBlock(): signedResults: ${signedResults}`);
+
+      return {
+        resObj: {
+          status: 200,
+          data: signedResults,
+        },
+        id: reqID,
+      };
+    } catch (e) {
+      const retObj = {
+        resObj: {
+          status: 504,
+          errorDetail: safeStringifyException(e),
+        },
+        id: reqID,
+      };
+
+      logger.error(`##getBlock: retObj: ${JSON.stringify(retObj)}`);
+
+      throw retObj;
+    }
+  }
+
+  /*
+   * getTransactionReceipt
+   *
+   * @param {String} transaction hash
+   *
+   * @return {Object} JSON object
+   */
+
+  async getTransactionReceipt(args: any) {
+    logger.debug("getTransactionReceipt start");
+
+    const txHash: string = args.args.args[0];
+    const reqID = args["reqID"];
+
+    if (txHash === undefined) {
+      const emsg = "JSON parse error!";
+      logger.warn(emsg);
+      throw {
+        resObj: {
+          status: 504,
+          errorDetail: emsg,
+        },
+        id: reqID,
+      };
+    }
+
+    try {
+      const txReceipt = await web3.eth.getTransactionReceipt(txHash);
+      logger.info(`getTransactionReceipt(): txReceipt: ${txReceipt}`);
+
+      const result = {
+        txReceipt: txReceipt,
+      };
+      logger.debug(`getTransactionReceipt(): result: ${result}`);
+
+      const signedResults = signMessageJwt({ result: result });
+      logger.debug(`getTransactionReceipt(): signedResults: ${signedResults}`);
+
+      const retObj = {
+        resObj: {
+          status: 200,
+          data: signedResults,
+        },
+        id: reqID,
+      };
+
+      logger.debug(
+        `##getTransactionReceipt: retObj: ${JSON.stringify(retObj)}`,
+      );
+      return retObj;
+    } catch (e) {
+      const retObj = {
+        resObj: {
+          status: 504,
+          errorDetail: safeStringifyException(e),
+        },
+        id: reqID,
+      };
+
+      logger.error(
+        `##getTransactionReceipt: retObj: ${JSON.stringify(retObj)}`,
+      );
+
+      throw retObj;
+    }
+  }
+
+  // Define an arbitrary function and implement it according to specifications of end-chains
+  /**
    * getNumericBalance
    * Get numerical balance
    *
@@ -66,67 +239,61 @@ export class ServerPlugin {
    *      "reqID":<request ID> (option)
    * }
    * @return {Object} JSON object
+   *
+   * @todo Return string/BN instead of number
+   * @todo Return signMessageJwt() message instead of plain message.
    */
-  getNumericBalance(args: any) {
-    // * The Web3 API can be used synchronously, but each function is always an asynchronous specification because of the use of other APIs such as REST,
-    return new Promise((resolve, reject) => {
-      logger.info("getNumericBalance start");
-      let retObj: Record<string, any>;
+  async getNumericBalance(args: any) {
+    logger.debug("getNumericBalance start");
 
-      const referedAddress = args.args.args[0];
-      const reqID = args["reqID"];
+    const referedAddress = args.args.args[0];
+    const reqID = args["reqID"];
 
-      if (referedAddress === undefined) {
-        const emsg = "JSON parse error!";
-        logger.info(emsg);
-        retObj = {
-          resObj: {
-            status: 504,
-            errorDetail: emsg,
-          },
-        };
-        return reject(retObj);
-      }
-      const ethargs = referedAddress;
-      // Handling exceptions to absorb the difference of interest.
-      try {
-        const web3 = new Web3();
-        web3.setProvider(
-          new web3.providers.HttpProvider(config.read("ledgerUrl")),
-        );
-        const balance = web3.eth.getBalance(ethargs);
-        const amountVal = balance.toNumber();
-        retObj = {
-          resObj: {
-            status: 200,
-            amount: amountVal,
-          },
-        };
-        if (reqID !== undefined) {
-          retObj["id"] = reqID;
-        }
-        logger.debug(`##getNumericBalance: retObj: ${JSON.stringify(retObj)}`);
-        return resolve(retObj);
-      } catch (e) {
-        retObj = {
-          resObj: {
-            status: 504,
-            errorDetail: safeStringify(e),
-          },
-        };
-        logger.error(retObj);
+    if (referedAddress === undefined) {
+      const emsg = "JSON parse error!";
+      logger.warn(emsg);
+      throw {
+        resObj: {
+          status: 504,
+          errorDetail: emsg,
+        },
+        id: reqID,
+      };
+    }
 
-        if (reqID !== undefined) {
-          retObj["id"] = reqID;
-        }
-        logger.debug(`##getNumericBalance: retObj: ${JSON.stringify(retObj)}`);
+    const ethargs = referedAddress;
 
-        return reject(retObj);
-      }
-    });
+    // Handling exceptions to absorb the difference of interest.
+    try {
+      const balance = await web3.eth.getBalance(ethargs);
+      const amountVal = parseInt(balance, 10);
+      const retObj = {
+        resObj: {
+          status: 200,
+          amount: amountVal,
+        },
+        id: reqID,
+      };
+      logger.debug(`##getNumericBalance: retObj: ${JSON.stringify(retObj)}`);
+      return retObj;
+    } catch (e) {
+      const retObj = {
+        resObj: {
+          status: 504,
+          errorDetail: safeStringifyException(e),
+        },
+        id: reqID,
+      };
+
+      logger.error(`##getNumericBalance: retObj: ${JSON.stringify(retObj)}`);
+
+      throw retObj;
+    }
   }
 
-  /*
+  /**
+   * @deprecated - Not usable, can't unlock account remotely at the moment.
+   *
    * transferNumericAsset
    * Transfer numerical asset
    *
@@ -156,7 +323,7 @@ export class ServerPlugin {
         funcParam["amount"] == undefined
       ) {
         const emsg = "JSON parse error!";
-        logger.error(emsg);
+        logger.warn(emsg);
         retObj = {
           resObj: {
             status: 504,
@@ -180,10 +347,6 @@ export class ServerPlugin {
 
       // Handle the exception once to absorb the difference of interest.
       try {
-        const web3 = new Web3();
-        web3.setProvider(
-          new web3.providers.HttpProvider(config.read("ledgerUrl")),
-        );
         const res = web3.eth[sendFunction](sendArgs);
 
         retObj = {
@@ -203,7 +366,7 @@ export class ServerPlugin {
         retObj = {
           resObj: {
             status: 504,
-            errorDetail: safeStringify(e),
+            errorDetail: safeStringifyException(e),
           },
         };
         logger.error(retObj);
@@ -231,78 +394,68 @@ export class ServerPlugin {
    * }
    * @return {Object} JSON object
    */
-  getNonce(args: any) {
-    // * The Web3 API can be used synchronously, but each function is always an asynchronous specification because of the use of other APIs such as REST,
-    return new Promise((resolve, reject) => {
-      logger.info("getNonce start");
-      let retObj: Record<string, any>;
+  async getNonce(args: any) {
+    logger.debug("getNonce start");
 
-      const targetAddress = args.args.args.args[0];
-      const reqID = args["reqID"];
+    const targetAddress = args.args.args.args[0];
+    const reqID = args["reqID"];
 
-      if (targetAddress === undefined) {
-        const emsg = "JSON parse error!";
-        logger.info(emsg);
-        retObj = {
-          resObj: {
-            status: 504,
-            errorDetail: emsg,
-          },
-        };
-        return reject(retObj);
-      }
+    if (targetAddress === undefined) {
+      const emsg = "JSON parse error!";
+      logger.warn(emsg);
+      return {
+        resObj: {
+          status: 504,
+          errorDetail: emsg,
+        },
+        id: reqID,
+      };
+    }
 
-      // var ethargs = '0x' + targetAddress;
-      const ethargs = targetAddress;
-      logger.debug(
-        `getNonce(): ethargs: ${ethargs}, targetAddress: ${targetAddress}`,
-      );
-      // Handling exceptions to absorb the difference of interest.
-      try {
-        const web3 = new Web3();
-        web3.setProvider(
-          new web3.providers.HttpProvider(config.read("ledgerUrl")),
-        );
-        const txnCount = web3.eth.getTransactionCount(ethargs);
-        logger.info(`getNonce(): txnCount: ${txnCount}`);
-        const hexStr = web3.toHex(txnCount);
-        logger.info(`getNonce(): hexStr: ${hexStr}`);
-        const result = {
-          nonce: txnCount,
-          nonceHex: hexStr,
-        };
-        logger.debug(`getNonce(): result: ${result}`);
+    // var ethargs = '0x' + targetAddress;
+    const ethargs = targetAddress;
+    logger.debug(
+      `getNonce(): ethargs: ${ethargs}, targetAddress: ${targetAddress}`,
+    );
 
-        const signedResults = ValidatorAuthentication.sign({ result: result });
-        logger.debug(`getNonce(): signedResults: ${signedResults}`);
-        retObj = {
-          resObj: {
-            status: 200,
-            data: signedResults,
-          },
-        };
-        if (reqID !== undefined) {
-          retObj["id"] = reqID;
-        }
-        logger.debug(`##getNonce: retObj: ${JSON.stringify(retObj)}`);
-        return resolve(retObj);
-      } catch (e) {
-        retObj = {
-          resObj: {
-            status: 504,
-            errorDetail: safeStringify(e),
-          },
-        };
-        logger.error(retObj);
+    // Handling exceptions to absorb the difference of interest.
+    try {
+      const txnCount = await web3.eth.getTransactionCount(ethargs);
+      logger.info(`getNonce(): txnCount: ${txnCount}`);
+      const hexStr = web3.utils.toHex(txnCount);
+      logger.info(`getNonce(): hexStr: ${hexStr}`);
+      const result = {
+        nonce: txnCount,
+        nonceHex: hexStr,
+      };
+      logger.debug(`getNonce(): result: ${result}`);
 
-        if (reqID !== undefined) {
-          retObj["id"] = reqID;
-        }
-        logger.debug(`##getNonce: retObj: ${JSON.stringify(retObj)}`);
+      const signedResults = signMessageJwt({ result: result });
+      logger.debug(`getNonce(): signedResults: ${signedResults}`);
+      const retObj = {
+        resObj: {
+          status: 200,
+          data: signedResults,
+        },
+        id: reqID,
+      };
 
-        return reject(retObj);
-      }
-    });
+      logger.debug(`##getNonce: retObj: ${JSON.stringify(retObj)}`);
+
+      return retObj;
+    } catch (e) {
+      const retObj = {
+        resObj: {
+          status: 504,
+          errorDetail: safeStringifyException(e),
+        },
+        id: reqID,
+      };
+
+      logger.error(`##getNonce: retObj: ${JSON.stringify(retObj)}`);
+
+      return retObj;
+    }
   }
 
   /*
@@ -316,71 +469,62 @@ export class ServerPlugin {
    * }
    * @return {Object} JSON object
    */
-  toHex(args: any) {
-    // * The Web3 API can be used synchronously, but each function is always an asynchronous specification because of the use of other APIs such as REST,
-    return new Promise((resolve, reject) => {
-      logger.info("toHex start");
-      let retObj: Record<string, any>;
+  async toHex(args: any) {
+    logger.debug("toHex start");
 
-      const targetValue = args.args.args.args[0];
-      const reqID = args["reqID"];
+    const targetValue = args.args.args.args[0];
+    const reqID = args["reqID"];
 
-      if (targetValue === undefined) {
-        const emsg = "JSON parse error!";
-        logger.info(emsg);
-        retObj = {
-          resObj: {
-            status: 504,
-            errorDetail: emsg,
-          },
-        };
-        return reject(retObj);
-      }
+    if (targetValue === undefined) {
+      const emsg = "JSON parse error!";
+      logger.warn(emsg);
+      return {
+        resObj: {
+          status: 504,
+          errorDetail: emsg,
+        },
+        id: reqID,
+      };
+    }
 
-      logger.debug(`toHex(): targetValue: ${targetValue}`);
-      // Handling exceptions to absorb the difference of interest.
-      try {
-        const web3 = new Web3();
-        web3.setProvider(
-          new web3.providers.HttpProvider(config.read("ledgerUrl")),
-        );
-        const hexStr = web3.toHex(targetValue);
-        logger.info(`toHex(): hexStr: ${hexStr}`);
-        const result = {
-          hexStr: hexStr,
-        };
-        logger.debug(`toHex(): result: ${result}`);
+    logger.debug(`toHex(): targetValue: ${targetValue}`);
 
-        const signedResults = ValidatorAuthentication.sign({ result: result });
-        logger.debug(`toHex(): signedResults: ${signedResults}`);
-        retObj = {
-          resObj: {
-            status: 200,
-            data: signedResults,
-          },
-        };
-        if (reqID !== undefined) {
-          retObj["id"] = reqID;
-        }
-        logger.debug(`##toHex: retObj: ${JSON.stringify(retObj)}`);
-        return resolve(retObj);
-      } catch (e) {
-        retObj = {
-          resObj: {
-            status: 504,
-            errorDetail: safeStringify(e),
-          },
-        };
-        logger.error(retObj);
+    // Handling exceptions to absorb the difference of interest.
+    try {
+      const hexStr = web3.utils.toHex(targetValue);
+      logger.info(`toHex(): hexStr: ${hexStr}`);
+      const result = {
+        hexStr: hexStr,
+      };
+      logger.debug(`toHex(): result: ${result}`);
 
-        if (reqID !== undefined) {
-          retObj["id"] = reqID;
-        }
-        logger.debug(`##toHex: retObj: ${JSON.stringify(retObj)}`);
+      const signedResults = signMessageJwt({ result: result });
+      logger.debug(`toHex(): signedResults: ${signedResults}`);
 
-        return reject(retObj);
-      }
-    });
+      const retObj = {
+        resObj: {
+          status: 200,
+          data: signedResults,
+        },
+        id: reqID,
+      };
+
+      logger.debug(`##toHex: retObj: ${JSON.stringify(retObj)}`);
+      return retObj;
+    } catch (e) {
+      const retObj = {
+        resObj: {
+          status: 504,
+          errorDetail: safeStringifyException(e),
+        },
+        id: reqID,
+      };
+      logger.error(retObj);
+
+      logger.debug(`##toHex: retObj: ${JSON.stringify(retObj)}`);
+
+      return retObj;
+    }
   }
 
   /*
@@ -392,52 +536,63 @@ export class ServerPlugin {
    *      "serializedTx":<Serialized and signed transaction>
    * }
    * @return {Object} JSON object
+   *
+   * @todo Return entire transaction receipt
    */
-  sendRawTransaction(args: any) {
-    return new Promise((resolve, reject) => {
-      logger.info("sendRawTransaction(start");
+  async sendRawTransaction(args: any) {
+    logger.debug("sendRawTransaction(start");
 
-      let retObj: Record<string, any>;
-      const sendArgs = {};
-      const sendFunction = "sendTransaction";
-      const funcParam = args.args.args[0];
+    const funcParam = args.args.args[0];
+    const reqID = args["reqID"];
 
-      if (funcParam["serializedTx"] == undefined) {
+    // Handle the exception once to absorb the difference of interest.
+    try {
+      if (!funcParam || funcParam["serializedTx"] == undefined) {
         const emsg = "JSON parse error!";
-        logger.error(emsg);
-        retObj = {
-          status: 504,
-          errorDetail: emsg,
+        logger.warn(emsg);
+        return {
+          resObj: {
+            status: 504,
+            errorDetail: emsg,
+          },
+          id: reqID,
         };
-        return reject(retObj);
       }
 
       const serializedTx = funcParam["serializedTx"];
       logger.info("serializedTx  :" + serializedTx);
 
-      // Handle the exception once to absorb the difference of interest.
-      try {
-        const web3 = new Web3();
-        web3.setProvider(
-          new web3.providers.HttpProvider(config.read("ledgerUrl")),
-        );
-        const res = web3.eth.sendRawTransaction(serializedTx);
+      const res = await web3.eth.sendSignedTransaction(serializedTx);
+      const result = {
+        txid: res.transactionHash,
+      };
 
-        retObj = {
+      const signedResults = signMessageJwt({ result });
+      logger.debug(`sendRawTransaction(): signedResults: ${signedResults}`);
+      const retObj = {
+        resObj: {
           status: 200,
-          txid: res,
-        };
-        return resolve(retObj);
-      } catch (e) {
-        retObj = {
-          status: 504,
-          errorDetail: safeStringify(e),
-        };
-        logger.error(retObj);
+          data: signedResults,
+        },
+        id: reqID,
+      };
 
-        return reject(retObj);
-      }
-    });
+      logger.debug(`##sendRawTransaction: retObj: ${JSON.stringify(retObj)}`);
+
+      return retObj;
+    } catch (e) {
+      const retObj = {
+        resObj: {
+          status: 504,
+          errorDetail: safeStringifyException(e),
+        },
+        id: reqID,
+      };
+
+      logger.error(`##sendRawTransaction: retObj: ${JSON.stringify(retObj)}`);
+
+      return retObj;
+    }
   }
 
   /*
@@ -451,59 +606,57 @@ export class ServerPlugin {
    * }
    * @return {Object} JSON object
    */
-  web3Eth(args: any) {
-    return new Promise((resolve, reject) => {
-      logger.info("web3Eth start");
+  async web3Eth(args: any) {
+    logger.debug("web3Eth start");
 
-      let retObj: Record<string, any>;
-      const sendFunction = args.method.command;
-      const sendArgs = args.args.args[0];
-      const reqID = args["reqID"];
+    const sendFunction = args.method.command;
+    const sendArgs = args.args.args ?? [];
+    const reqID = args["reqID"];
 
-      logger.info("send_func  :" + sendFunction);
-      logger.info("sendArgs  :" + JSON.stringify(sendArgs));
+    logger.debug("send_func  :", sendFunction);
+    logger.debug("sendArgs  :", JSON.stringify(sendArgs));
 
-      // Handle the exception once to absorb the difference of interest.
-      try {
-        const web3 = new Web3();
-        web3.setProvider(
-          new web3.providers.HttpProvider(config.read("ledgerUrl")),
+    // Handle the exception once to absorb the difference of interest.
+    try {
+      const looseWeb3Eth = web3.eth as any;
+
+      const isSafeToCall =
+        Object.prototype.hasOwnProperty.call(looseWeb3Eth, sendFunction) &&
+        typeof looseWeb3Eth[sendFunction] === "function";
+      if (!isSafeToCall) {
+        throw new Error(
+          `Invalid method name provided in request. ${sendFunction} does not exist on the Web3.Eth 1.7+ object.`,
         );
-        let result: any = null;
-        if (sendArgs !== undefined) {
-          result = web3.eth[sendFunction](sendArgs);
-        } else {
-          result = web3.eth[sendFunction]();
-        }
-        const signedResults = ValidatorAuthentication.sign({ result: result });
-        retObj = {
-          resObj: {
-            status: 200,
-            data: signedResults,
-          },
-        };
-        if (reqID !== undefined) {
-          retObj["id"] = reqID;
-        }
-        logger.debug(`##web3Eth: retObj: ${JSON.stringify(retObj)}`);
-        return resolve(retObj);
-      } catch (e) {
-        retObj = {
-          resObj: {
-            status: 504,
-            errorDetail: safeStringify(e),
-          },
-        };
-        logger.error(retObj);
-
-        if (reqID !== undefined) {
-          retObj["id"] = reqID;
-        }
-        logger.debug(`##web3Eth: retObj: ${JSON.stringify(retObj)}`);
-
-        return reject(retObj);
       }
-    });
+
+      let result = await looseWeb3Eth[sendFunction](...sendArgs);
+
+      const signedResults = signMessageJwt({ result: result });
+      const retObj = {
+        resObj: {
+          status: 200,
+          data: signedResults,
+        },
+        id: reqID,
+      };
+
+      logger.debug(`##web3Eth: retObj: ${JSON.stringify(retObj)}`);
+
+      return retObj;
+    } catch (e) {
+      const retObj = {
+        resObj: {
+          status: 504,
+          errorDetail: safeStringifyException(e),
+        },
+        id: reqID,
+      };
+      logger.error(retObj);
+
+      logger.error(`##web3Eth: retObj: ${JSON.stringify(retObj)}`);
+
+      return retObj;
+    }
   }
 
   /*
@@ -518,86 +671,66 @@ export class ServerPlugin {
    * }
    * @return {Object} JSON object
    */
-  contract(args: any) {
-    return new Promise((resolve, reject) => {
-      logger.info("contract start");
+  async contract(args: any) {
+    logger.debug("contract start");
 
-      let retObj: Record<string, any>;
-      const sendCommand = args.method.command;
-      const sendFunction = args.method.function;
-      const sendArgs = args.args.args;
-      const reqID = args["reqID"];
+    const sendCommand = args.method.command;
+    const sendFunction = args.method.function;
+    const sendArgs = args.args.args ?? [];
+    const reqID = args["reqID"];
 
-      logger.info("sendCommand  :" + sendCommand);
-      logger.info("sendFunction  :" + sendFunction);
-      logger.info("sendArgs  :" + JSON.stringify(sendArgs));
+    logger.info("sendCommand  :" + sendCommand);
+    logger.info("sendFunction  :" + sendFunction);
+    logger.info("sendArgs  :" + JSON.stringify(sendArgs));
 
-      // Handle the exception once to absorb the difference of interest.
-      try {
-        const web3 = new Web3();
-        web3.setProvider(
-          new web3.providers.HttpProvider(config.read("ledgerUrl")),
+    // Handle the exception once to absorb the difference of interest.
+    try {
+      const contract = new web3.eth.Contract(
+        args.contract.abi as AbiItem[],
+        args.contract.address,
+      );
+      (contract as any).setProvider(web3.currentProvider);
+
+      const isSafeToCall =
+        Object.prototype.hasOwnProperty.call(contract.methods, sendCommand) &&
+        typeof contract.methods[sendCommand] === "function";
+      if (!isSafeToCall) {
+        throw new Error(
+          `Invalid method name provided in request. ${sendCommand} does not exist on the Web3 contract object's "methods" property.`,
         );
-        const contract = web3.eth
-          .contract(args.contract.abi)
-          .at(args.contract.address);
-
-        let result: any = null;
-        switch (sendArgs.length) {
-          case 0:
-            logger.debug(`##contract: No args.`);
-            result = contract[sendCommand][sendFunction]();
-            break;
-          case 1:
-            logger.debug(`##contract: One arg.`);
-            result = contract[sendCommand][sendFunction](sendArgs[0]);
-            break;
-          case 2:
-            logger.debug(`##contract: Two args.`);
-            result = contract[sendCommand][sendFunction](
-              sendArgs[0],
-              sendArgs[1],
-            );
-            break;
-          case 3:
-            logger.debug(`##contract: Three args.`);
-            result = contract[sendCommand][sendFunction](
-              sendArgs[0],
-              sendArgs[1],
-              sendArgs[2],
-            );
-            break;
-        }
-        logger.debug(`##contract: result: ${result}`);
-
-        const signedResults = ValidatorAuthentication.sign({ result: result });
-        retObj = {
-          resObj: {
-            status: 200,
-            data: signedResults,
-          },
-        };
-        if (reqID !== undefined) {
-          retObj["id"] = reqID;
-        }
-        logger.debug(`##contract: retObj: ${JSON.stringify(retObj)}`);
-        return resolve(retObj);
-      } catch (e) {
-        retObj = {
-          resObj: {
-            status: 504,
-            errorDetail: safeStringify(e),
-          },
-        };
-        logger.error(retObj);
-
-        if (reqID !== undefined) {
-          retObj["id"] = reqID;
-        }
-        logger.debug(`##contract: retObj: ${JSON.stringify(retObj)}`);
-
-        return reject(retObj);
       }
-    });
+
+      // TODO - args.invocationParams do last
+      const result = await contract.methods[sendCommand](...sendArgs)[
+        sendFunction
+      ]();
+      logger.debug(`##contract: result: ${result}`);
+
+      const signedResults = signMessageJwt({ result: result });
+      const retObj = {
+        resObj: {
+          status: 200,
+          data: signedResults,
+        },
+        id: reqID,
+      };
+
+      logger.debug(`##contract: retObj: ${JSON.stringify(retObj)}`);
+
+      return retObj;
+    } catch (e) {
+      const retObj = {
+        resObj: {
+          status: 504,
+          errorDetail: safeStringifyException(e),
+        },
+        id: reqID,
+      };
+      logger.error(retObj);
+
+      logger.error(`##contract: retObj: ${JSON.stringify(retObj)}`);
+
+      return retObj;
+    }
   }
 } /* class */

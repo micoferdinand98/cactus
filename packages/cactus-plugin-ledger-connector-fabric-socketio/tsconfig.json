@@ -10,7 +10,8 @@
     "./src/main/typescript/common/core/*.ts",
     "./src/main/typescript/common/core/bin/*.ts",
     "./src/main/typescript/common/core/config/*.ts",
-    "./src/main/typescript/connector/*.ts"
+    "./src/main/typescript/connector/*.ts",
+    "./src/main/typescript/*.ts"
   ],
   "references": [
     {
@@ -18,6 +19,12 @@
     },
     {
       "path": "../cactus-test-tooling/tsconfig.json"
+    },
+    {
+      "path": "../cactus-cmd-socketio-server/tsconfig.json"
+    },
+    {
+      "path": "../cactus-cmd-api-server/tsconfig.json"
     }
   ]
 }

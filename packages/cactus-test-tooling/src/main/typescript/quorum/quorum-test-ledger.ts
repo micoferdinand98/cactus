@@ -1,3 +1,4 @@
+import { Stream } from "stream";
 import { EventEmitter } from "events";
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
@@ -106,14 +107,16 @@ export class QuorumTestLedger implements ITestLedger {
   }
 
   public async getFileContents(filePath: string): Promise<string> {
-    const response: any = await this.getContainer().getArchive({
-      path: filePath,
-    });
+    const response: NodeJS.ReadableStream = await this.getContainer().getArchive(
+      {
+        path: filePath,
+      },
+    );
     const extract: tar.Extract = tar.extract({ autoDestroy: true });
 
     return new Promise((resolve, reject) => {
       let fileContents = "";
-      extract.on("entry", async (header: any, stream, next) => {
+      extract.on("entry", async (header: unknown, stream, next) => {
         stream.on("error", (err: Error) => {
           reject(err);
         });
@@ -272,20 +275,24 @@ export class QuorumTestLedger implements ITestLedger {
       try {
         const res = await axios.get(httpUrl);
         reachable = res.status > 199 && res.status < 300;
-      } catch (ex) {
-        reachable = false;
-        if (Date.now() >= startedAt + timeoutMs) {
-          throw new Error(`${fnTag} timed out (${timeoutMs}ms) -> ${ex.stack}`);
+      } catch (ex: unknown) {
+        if (ex instanceof Error) {
+          reachable = false;
+          if (Date.now() >= startedAt + timeoutMs) {
+            throw new Error(
+              `${fnTag} timed out (${timeoutMs}ms) -> ${ex.stack}`,
+            );
+          }
         }
       }
       await new Promise((resolve2) => setTimeout(resolve2, 100));
     } while (!reachable);
   }
 
-  public stop(): Promise<any> {
+  public stop(): Promise<unknown> {
     return new Promise((resolve, reject) => {
       if (this.container) {
-        this.container.stop({}, (err: any, result: any) => {
+        this.container.stop({}, (err: unknown, result: unknown) => {
           if (err) {
             reject(err);
           } else {
@@ -375,16 +382,16 @@ export class QuorumTestLedger implements ITestLedger {
     }
   }
 
-  private pullContainerImage(containerNameAndTag: string): Promise<any[]> {
+  private pullContainerImage(containerNameAndTag: string): Promise<unknown[]> {
     return new Promise((resolve, reject) => {
       const docker = new Docker();
-      docker.pull(containerNameAndTag, (pullError: any, stream: any) => {
+      docker.pull(containerNameAndTag, (pullError: unknown, stream: Stream) => {
         if (pullError) {
           reject(pullError);
         } else {
           docker.modem.followProgress(
             stream,
-            (progressError: any, output: any[]) => {
+            (progressError: unknown, output: unknown[]) => {
               if (progressError) {
                 reject(progressError);
               } else {
